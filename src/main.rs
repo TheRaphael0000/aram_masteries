@@ -14,8 +14,12 @@ use aram_masteries::{
 #[command(name = "aram_masteries")]
 #[command(about = "List ARAM draft available champions ordered by mastery score via LCU API")]
 struct Cli {
-    /// Watch mode: continuously monitor champion select and update when champions change
+    /// Run once and exit instead of continuous watch mode
     #[arg(short, long)]
+    once: bool,
+
+    /// Kept for backwards compatibility (watch mode is now enabled by default)
+    #[arg(short, long, hide = true)]
     watch: bool,
 
     /// Polling interval in seconds for watch mode
@@ -69,6 +73,49 @@ fn chrono_now() -> String {
     format!("{:02}:{:02}:{:02}", hours, mins, secs)
 }
 
+fn wait_for_lcu(
+    port: Option<u16>,
+    auth: Option<String>,
+    interval_secs: f32,
+) -> (LcuClient, HashMap<i32, String>) {
+    let mut logged_waiting = false;
+    let poll_delay = Duration::from_secs_f32(interval_secs.max(1.0));
+
+    loop {
+        match LcuClient::new(port, auth.clone()) {
+            Ok(client) => {
+                println!(
+                    "{} Connected to League Client (LCU) on port {}",
+                    "✓".green().bold(),
+                    client.creds.port.to_string().cyan()
+                );
+                let champion_names = match client.get_champion_map() {
+                    Ok(names) => names,
+                    Err(e) => {
+                        eprintln!(
+                            "{} Failed to load champion summary: {}",
+                            "Warning:".yellow().bold(),
+                            e
+                        );
+                        HashMap::new()
+                    }
+                };
+                return (client, champion_names);
+            }
+            Err(_) => {
+                if !logged_waiting {
+                    println!(
+                        "{} Waiting for League of Legends client to launch and log in...",
+                        "⏳".bold()
+                    );
+                    logged_waiting = true;
+                }
+                thread::sleep(poll_delay);
+            }
+        }
+    }
+}
+
 fn run_single(
     lcu: &LcuClient,
     champion_names: &HashMap<i32, String>,
@@ -80,13 +127,17 @@ fn run_single(
     let session = match session_opt {
         Some(s) => s,
         None => {
-            return Err("You are not currently in a Champion Select session (or game has not started yet).".to_string());
+            return Err(
+                "You are not currently in a Champion Select session (or game has not started yet)."
+                    .to_string(),
+            );
         }
     };
 
     let masteries = lcu.get_mastery_map()?;
     let options = ExtractOptions::from(cli);
-    let (champions, current) = extract_available_champions(&session, champion_names, &masteries, &options);
+    let (champions, current) =
+        extract_available_champions(&session, champion_names, &masteries, &options);
 
     if cli.json {
         let json_output = serde_json::to_string_pretty(&champions)
@@ -107,8 +158,8 @@ fn run_single(
 }
 
 fn run_watch(
-    lcu: &LcuClient,
-    champion_names: &HashMap<i32, String>,
+    mut lcu: LcuClient,
+    mut champion_names: HashMap<i32, String>,
     cli: &Cli,
 ) -> Result<(), String> {
     println!(
@@ -140,7 +191,7 @@ fn run_watch(
                     let m_ref = masteries.unwrap_or(&dummy_map);
 
                     let (champions, current) =
-                        extract_available_champions(&session, champion_names, m_ref, &options);
+                        extract_available_champions(&session, &champion_names, m_ref, &options);
 
                     // Clear terminal screen
                     print!("\x1B[2J\x1B[1;1H");
@@ -179,7 +230,20 @@ fn run_watch(
                 }
             }
             Err(e) => {
-                eprintln!("LCU error: {}", e.red());
+                // If the connection was refused or lost (e.g. League Client closed or restarted)
+                print!("\x1B[2J\x1B[1;1H");
+                println!(
+                    "{} Connection lost ({}), waiting for League of Legends client...",
+                    "⏳".bold(),
+                    e.dimmed()
+                );
+                let (new_client, new_names) =
+                    wait_for_lcu(cli.port, cli.auth.clone(), cli.interval);
+                lcu = new_client;
+                champion_names = new_names;
+                last_signature = None;
+                cached_masteries = None;
+                in_session = false;
             }
         }
 
@@ -190,39 +254,46 @@ fn run_watch(
 fn main() {
     let cli = Cli::parse();
 
-    println!("{}", "Connecting to League Client (LCU)...".bold());
-    let lcu = match LcuClient::new(cli.port, cli.auth.clone()) {
-        Ok(client) => {
-            println!(
-                "{} Connected to LCU on port {}",
-                "✓".green().bold(),
-                client.creds.port.to_string().cyan()
-            );
-            client
-        }
-        Err(err) => {
-            eprintln!("{} {}", "Error:".red().bold(), err);
-            std::process::exit(1);
-        }
-    };
+    if cli.once {
+        println!("{}", "Connecting to League Client (LCU)...".bold());
+        let lcu = match LcuClient::new(cli.port, cli.auth.clone()) {
+            Ok(client) => {
+                println!(
+                    "{} Connected to LCU on port {}",
+                    "✓".green().bold(),
+                    client.creds.port.to_string().cyan()
+                );
+                client
+            }
+            Err(err) => {
+                eprintln!("{} {}", "Error:".red().bold(), err);
+                std::process::exit(1);
+            }
+        };
 
-    println!("{}", "Loading champion catalog...".dimmed());
-    let champion_names = match lcu.get_champion_map() {
-        Ok(names) => names,
-        Err(e) => {
-            eprintln!("{} Failed to load champion summary: {}", "Warning:".yellow().bold(), e);
-            HashMap::new()
-        }
-    };
+        println!("{}", "Loading champion catalog...".dimmed());
+        let champion_names = match lcu.get_champion_map() {
+            Ok(names) => names,
+            Err(e) => {
+                eprintln!(
+                    "{} Failed to load champion summary: {}",
+                    "Warning:".yellow().bold(),
+                    e
+                );
+                HashMap::new()
+            }
+        };
 
-    if cli.watch {
-        if let Err(e) = run_watch(&lcu, &champion_names, &cli) {
+        if let Err(e) = run_single(&lcu, &champion_names, &cli) {
+            eprintln!("{} {}", "Notice:".yellow().bold(), e);
+            std::process::exit(0);
+        }
+    } else {
+        // Default mode: Watch / Live mode (user can just double-click the exe)
+        let (lcu, champion_names) = wait_for_lcu(cli.port, cli.auth.clone(), cli.interval);
+        if let Err(e) = run_watch(lcu, champion_names, &cli) {
             eprintln!("{} {}", "Error:".red().bold(), e);
             std::process::exit(1);
         }
-    } else if let Err(e) = run_single(&lcu, &champion_names, &cli) {
-        eprintln!("{} {}", "Notice:".yellow().bold(), e);
-        println!("\nTip: Run with {} to automatically display and update the champion list when draft starts!", "--watch / -w".bold().cyan());
-        std::process::exit(0);
     }
 }

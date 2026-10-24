@@ -12,7 +12,7 @@ This document contains everything an AI agent or human developer needs to unders
 2. Cross-references the local player's **Champion Mastery** data.
 3. Ranks all available champions in descending order of mastery score.
 4. Renders a terminal table or outputs JSON.
-5. In `--watch` (`-w`) mode, monitors the draft in real time and automatically updates whenever someone rolls or trades.
+5. Monitors the draft in real time by default, auto-waiting for League to launch and automatically updating whenever someone rolls or trades (use `--once` for single-shot query).
 
 ---
 
@@ -103,20 +103,20 @@ cargo test
 A release workflow is configured in `.github/workflows/release.yml`:
 - **Triggers**: Automatically on every push/commit to `main`.
 - **Release Version**: Determined via `git describe --tags --always` (with full history fetched via `fetch-depth: 0`).
-- **Runner & Cross-Compilation**: Runs on Linux (`ubuntu-latest`) using `cargo-xwin` to cross-compile the native Windows MSVC binary (`x86_64-pc-windows-msvc`) with bash.
+- **Runner**: Runs natively on Windows (`windows-latest`) using `bash` as the step shell.
 - **Artifacts**: Produces `aram_masteries.exe` and a `.zip` archive (`aram_masteries-<tag/hash>-windows-x86_64.zip`), attaching both to the GitHub Release.
 
 ### Running the CLI
 
 ```powershell
-# Single-shot execution
+# Default: Live watch mode (auto-connects or waits for League)
 cargo run
 
-# Watch mode (automatically updates during draft countdown)
-cargo run -- --watch
+# Single-shot execution
+cargo run -- --once
 
 # Custom poll interval (e.g. 1.0 second)
-cargo run -- -w -i 1.0
+cargo run -- -i 1.0
 
 # Bench only (filter out teammates)
 cargo run -- --bench-only

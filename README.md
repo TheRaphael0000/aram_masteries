@@ -1,4 +1,4 @@
-> this is some vibe coded bs I did in like 10min cause i wanted to see my masteries in ARAM, just be aware.
+> this is some vibe coded bs I did in like 1h cause i wanted to see my masteries in ARAM, just be aware.
 
 # ARAM Masteries
 
@@ -8,10 +8,10 @@ A fast Rust CLI application that queries the League of Legends Client (LCU) API 
 
 ## Features
 
-- **Automatic LCU Detection**: Finds the running League Client port and auth token automatically via process inspection and lockfile parsing.
+- **Automatic LCU Detection & Auto-Reconnect**: Finds the running League Client port and auth token automatically. If League isn't open yet, it waits for it to launch.
 - **Mastery Ranking**: Ranks champions descending by mastery points, level, and season milestones.
 - **Clear Identification**: Tags each champion as `[BENCH POOL]`, `[TEAMMATE]`, or `[CURRENT]`.
-- **Live Watch Mode (`-w`)**: Polls in real time and automatically re-renders the table whenever someone rolls or trades.
+- **Live Watch by Default**: Starts monitoring right away (just double-click the `.exe`!) and automatically updates whenever someone rolls or trades.
 - **Filtering Options**: Supports `--bench-only`, `--team-only`, and `--no-current`.
 - **JSON Support**: `--json` flag for scripting, external tools, or piping.
 
@@ -21,26 +21,26 @@ A fast Rust CLI application that queries the League of Legends Client (LCU) API 
 
 ### Pre-built Binary (Windows)
 
-Download the latest `aram_masteries.exe` or `.zip` release directly from the [GitHub Releases](https://github.com/TheRaphael0000/aram_masteries/releases) page. No Rust toolchain installation required.
+1. Download the latest `aram_masteries.exe` (or zip) from [GitHub Releases](https://github.com/TheRaphael0000/aram_masteries/releases).
+2. **Double-click `aram_masteries.exe`**: It will open a terminal window, automatically connect to League (or wait for League to launch), and display your mastery ranking in real time as soon as draft starts!
 
 ### Building from Source
 
-Ensure you have Rust and Cargo installed, and that your League of Legends client is running and logged in.
+Ensure you have Rust and Cargo installed:
 
-#### Quick Run
 ```bash
-# Single check
+# Live watch mode (default)
 cargo run
 
-# Live watch mode (recommended during game queue / draft)
-cargo run -- -w
+# Single-shot check and exit
+cargo run -- --once
 ```
 
 ### CLI Options
 
 ```text
 Options:
-  -w, --watch                Watch mode: continuously monitor champion select and update when champions change
+  -o, --once                 Run once and exit instead of continuous watch mode
   -i, --interval <INTERVAL>  Polling interval in seconds for watch mode [default: 1.5]
       --bench-only           Show only champions from the bench pool
       --team-only            Show only champions held by teammates

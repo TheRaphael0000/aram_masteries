@@ -11,7 +11,10 @@ permissions:
 jobs:
   release:
     name: Build & Release Windows Binary
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout repository
@@ -25,11 +28,10 @@ jobs:
           echo "Determined release tag: $TAG"
           echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
 
-      - name: Cache cargo tools and dependencies
+      - name: Cache cargo dependencies
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/cargo-xwin
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
@@ -38,23 +40,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-release-
 
-      - name: Set up Windows MSVC target
-        run: |
-          rustup target add x86_64-pc-windows-msvc
-          which cargo-xwin || cargo install cargo-xwin --locked
-
       - name: Run Tests
         run: cargo test
 
       - name: Build Windows Binary
-        run: cargo xwin build --release --locked --target x86_64-pc-windows-msvc
+        run: cargo build --release --locked
 
       - name: Package Windows Artifacts
         run: |
-          EXE_PATH="target/x86_64-pc-windows-msvc/release/aram_masteries.exe"
+          EXE_PATH="target/release/aram_masteries.exe"
           ZIP_NAME="aram_masteries-${RELEASE_TAG}-windows-x86_64.zip"
 
-          zip -j "$ZIP_NAME" "$EXE_PATH" README.md
+          cp "$EXE_PATH" ./
+          7z a "$ZIP_NAME" aram_masteries.exe README.md
           echo "ARCHIVE_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
           echo "EXE_PATH=$EXE_PATH" >> "$GITHUB_ENV"
 
