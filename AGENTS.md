@@ -98,6 +98,13 @@ cargo build --release
 cargo test
 ```
 
+### GitHub Actions Release Workflow
+
+A release workflow is configured in `.github/workflows/release.yml`:
+- **Triggers**: Automatically when pushing a tag starting with `v` (e.g. `git tag v0.1.0 && git push origin v0.1.0`).
+- **Runner & Cross-Compilation**: Runs on Linux (`ubuntu-latest`) using `cargo-xwin` to cross-compile the native Windows MSVC binary (`x86_64-pc-windows-msvc`) with bash.
+- **Artifacts**: Produces `aram_masteries.exe` and a `.zip` archive (`aram_masteries-<tag>-windows-x86_64.zip`), attaching both to the GitHub Release.
+
 ### Running the CLI
 
 ```powershell

@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release Windows Binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache cargo tools and dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-xwin
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+
+      - name: Set up Windows MSVC target
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          which cargo-xwin || cargo install cargo-xwin --locked
+
+      - name: Run Tests
+        run: cargo test
+
+      - name: Build Windows Binary
+        run: cargo xwin build --release --locked --target x86_64-pc-windows-msvc
+
+      - name: Package Windows Artifacts
+        run: |
+          EXE_PATH="target/x86_64-pc-windows-msvc/release/aram_masteries.exe"
+          ZIP_NAME="aram_masteries-${{ github.ref_name }}-windows-x86_64.zip"
+
+          zip -j "$ZIP_NAME" "$EXE_PATH" README.md
+          echo "ARCHIVE_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+          echo "EXE_PATH=$EXE_PATH" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" "$EXE_PATH" "$ARCHIVE_NAME" \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes

@@ -19,9 +19,15 @@ A fast Rust CLI application that queries the League of Legends Client (LCU) API 
 
 ## Installation & Running
 
+### Pre-built Binary (Windows)
+
+Download the latest `aram_masteries.exe` or `.zip` release directly from the [GitHub Releases](https://github.com/TheRaphael0000/aram_masteries/releases) page. No Rust toolchain installation required.
+
+### Building from Source
+
 Ensure you have Rust and Cargo installed, and that your League of Legends client is running and logged in.
 
-### Quick Run
+#### Quick Run
 ```bash
 # Single check
 cargo run
@@ -49,4 +55,4 @@ Options:
 
 ## Architecture & Development
 
-For technical details, endpoint specifications, and guides on how to edit and extend this codebase, see [agent.md](file:///M:/dev/vibe/aram_masteries/agent.md).
+For technical details, endpoint specifications, and guides on how to edit and extend this codebase, see [AGENTS.md](AGENTS.md).
