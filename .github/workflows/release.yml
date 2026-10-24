@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
 jobs:
   release:
     name: Build & Release Windows Binary
@@ -17,6 +21,11 @@ jobs:
         shell: bash
 
     steps:
+      - name: Disable Windows Defender on build directories
+        shell: powershell
+        run: |
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo", "$env:GITHUB_WORKSPACE"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -35,13 +44,13 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
+            target/release/
           key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-
 
-      - name: Run Tests
-        run: cargo test
+      - name: Run Tests (Release mode)
+        run: cargo test --release
 
       - name: Build Windows Binary
         run: cargo build --release --locked
