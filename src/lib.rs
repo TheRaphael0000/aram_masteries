@@ -1,7 +1,7 @@
 pub mod lcu;
 pub mod models;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use colored::*;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
@@ -33,6 +33,7 @@ pub fn extract_available_champions(
     session: &ChampSelectSession,
     champion_names: &HashMap<i32, String>,
     masteries: &HashMap<i32, ChampionMasteryItem>,
+    arac_completed_ids: &HashSet<i32>,
     options: &ExtractOptions,
 ) -> (Vec<AvailableChampion>, Option<AvailableChampion>) {
     let mut available = Vec::new();
@@ -54,6 +55,7 @@ pub fn extract_available_champions(
                 mastery_points: mastery.map(|m| m.champion_points).unwrap_or(0),
                 points_until_next_level: mastery.map(|m| m.champion_points_until_next_level).unwrap_or(0),
                 highest_grade: mastery.and_then(|m| m.highest_grade.clone()),
+                arac_completed: arac_completed_ids.contains(&member.champion_id),
             };
             current_champion = Some(item.clone());
             if !options.no_current && !options.bench_only && !options.team_only {
@@ -79,6 +81,7 @@ pub fn extract_available_champions(
                     mastery_points: mastery.map(|m| m.champion_points).unwrap_or(0),
                     points_until_next_level: mastery.map(|m| m.champion_points_until_next_level).unwrap_or(0),
                     highest_grade: mastery.and_then(|m| m.highest_grade.clone()),
+                    arac_completed: arac_completed_ids.contains(&bench.champion_id),
                 });
             }
         }
@@ -101,6 +104,7 @@ pub fn extract_available_champions(
                     mastery_points: mastery.map(|m| m.champion_points).unwrap_or(0),
                     points_until_next_level: mastery.map(|m| m.champion_points_until_next_level).unwrap_or(0),
                     highest_grade: mastery.and_then(|m| m.highest_grade.clone()),
+                    arac_completed: arac_completed_ids.contains(&member.champion_id),
                 });
             }
         }
@@ -124,12 +128,18 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
     }
 
     if let Some(curr) = current {
+        let arac_status = if curr.arac_completed {
+            "Completed".green()
+        } else {
+            "Needed".yellow()
+        };
         println!(
-            "{} {} (Level {}, {} pts)",
+            "{} {} (Level {}, {} pts, ARAC: {})",
             "Currently Assigned:".bold().cyan(),
             curr.name.bold().green(),
             curr.mastery_level,
-            format_number(curr.mastery_points).yellow()
+            format_number(curr.mastery_points).yellow(),
+            arac_status
         );
         println!();
     }
@@ -147,6 +157,7 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
             Cell::new("Mastery Points").set_alignment(CellAlignment::Right),
             Cell::new("Next Level in").set_alignment(CellAlignment::Right),
             Cell::new("Season Grade").set_alignment(CellAlignment::Center),
+            Cell::new("All Random All Champions").set_alignment(CellAlignment::Center),
         ]);
 
     for (index, champ) in champions.iter().enumerate() {
@@ -163,6 +174,12 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
         };
 
         let grade = champ.highest_grade.as_deref().unwrap_or("-");
+
+        let (arac_str, arac_color) = if champ.arac_completed {
+            ("Completed", Color::Green)
+        } else {
+            ("Needed", Color::Yellow)
+        };
 
         let mut row = Row::new();
         row.add_cell(Cell::new(format!("{}", index + 1)).set_alignment(CellAlignment::Center));
@@ -186,6 +203,7 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
         );
         row.add_cell(Cell::new(next_pts).set_alignment(CellAlignment::Right));
         row.add_cell(Cell::new(grade).set_alignment(CellAlignment::Center));
+        row.add_cell(Cell::new(arac_str).set_alignment(CellAlignment::Center).fg(arac_color));
 
         table.add_row(row);
     }

@@ -83,4 +83,28 @@ pub struct AvailableChampion {
     pub mastery_points: u64,
     pub points_until_next_level: i64,
     pub highest_grade: Option<String>,
+    #[serde(default, alias = "all_random_all_champions_completed")]
+    pub arac_completed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChallengeInfo {
+    pub id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub completed_ids: Vec<i32>,
+    #[serde(default)]
+    pub current_level: Option<String>,
+    #[serde(default)]
+    pub current_value: Option<f64>,
+    #[serde(default)]
+    pub current_threshold: Option<f64>,
+    #[serde(default)]
+    pub next_threshold: Option<f64>,
+    #[serde(default)]
+    pub retire_timestamp: Option<u64>,
 }

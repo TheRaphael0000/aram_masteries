@@ -1,11 +1,10 @@
+use clap::Parser;
+use colored::*;
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
-use clap::Parser;
-use colored::*;
 
 use aram_masteries::lcu::LcuClient;
-use aram_masteries::models::ChampionMasteryItem;
 use aram_masteries::{
     extract_available_champions, generate_signature, print_champions_table, ExtractOptions,
 };
@@ -135,9 +134,16 @@ fn run_single(
     };
 
     let masteries = lcu.get_mastery_map()?;
+    let arac_completed_ids = lcu.get_arac_challenge();
+
     let options = ExtractOptions::from(cli);
-    let (champions, current) =
-        extract_available_champions(&session, champion_names, &masteries, &options);
+    let (champions, current) = extract_available_champions(
+        &session,
+        champion_names,
+        &masteries,
+        &arac_completed_ids,
+        &options,
+    );
 
     if cli.json {
         let json_output = serde_json::to_string_pretty(&champions)
@@ -169,8 +175,9 @@ fn run_watch(
     );
 
     let mut last_signature: Option<String> = None;
-    let mut cached_masteries: Option<HashMap<i32, ChampionMasteryItem>> = None;
     let mut in_session = false;
+    let arac_completed_ids = lcu.get_arac_challenge();
+    let masteries = lcu.get_mastery_map()?;
 
     let sleep_dur = Duration::from_secs_f32(cli.interval.max(0.5));
     let options = ExtractOptions::from(cli);
@@ -182,16 +189,13 @@ fn run_watch(
                 let changed = last_signature.as_ref() != Some(&sig);
 
                 if changed {
-                    if cached_masteries.is_none() {
-                        cached_masteries = lcu.get_mastery_map().ok();
-                    }
-
-                    let masteries = cached_masteries.as_ref();
-                    let dummy_map = HashMap::new();
-                    let m_ref = masteries.unwrap_or(&dummy_map);
-
-                    let (champions, current) =
-                        extract_available_champions(&session, &champion_names, m_ref, &options);
+                    let (champions, current) = extract_available_champions(
+                        &session,
+                        &champion_names,
+                        &masteries,
+                        &arac_completed_ids,
+                        &options,
+                    );
 
                     // Clear terminal screen
                     print!("\x1B[2J\x1B[1;1H");
@@ -226,7 +230,6 @@ fn run_watch(
                     );
                     in_session = false;
                     last_signature = Some("NONE".to_string());
-                    cached_masteries = None;
                 }
             }
             Err(e) => {
@@ -242,7 +245,6 @@ fn run_watch(
                 lcu = new_client;
                 champion_names = new_names;
                 last_signature = None;
-                cached_masteries = None;
                 in_session = false;
             }
         }

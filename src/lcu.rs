@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use reqwest::blocking::Client;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use reqwest::blocking::Client;
 use sysinfo::{ProcessesToUpdate, System};
 
-use crate::models::{ChampSelectSession, ChampionMasteryItem, ChampionSummaryItem};
+use crate::models::{ChallengeInfo, ChampSelectSession, ChampionMasteryItem, ChampionSummaryItem};
 
 #[derive(Debug, Clone)]
 pub struct LcuCredentials {
@@ -108,8 +108,12 @@ impl LcuClient {
     }
 
     pub fn get_champion_map(&self) -> Result<HashMap<i32, String>, String> {
-        let url = format!("{}/lol-game-data/assets/v1/champion-summary.json", self.base_url);
-        let resp = self.client
+        let url = format!(
+            "{}/lol-game-data/assets/v1/champion-summary.json",
+            self.base_url
+        );
+        let resp = self
+            .client
             .get(&url)
             .basic_auth("riot", Some(&self.creds.token))
             .send()
@@ -133,8 +137,12 @@ impl LcuClient {
     }
 
     pub fn get_mastery_map(&self) -> Result<HashMap<i32, ChampionMasteryItem>, String> {
-        let url = format!("{}/lol-champion-mastery/v1/local-player/champion-mastery", self.base_url);
-        let resp = self.client
+        let url = format!(
+            "{}/lol-champion-mastery/v1/local-player/champion-mastery",
+            self.base_url
+        );
+        let resp = self
+            .client
             .get(&url)
             .basic_auth("riot", Some(&self.creds.token))
             .send()
@@ -157,7 +165,8 @@ impl LcuClient {
 
     pub fn get_champ_select_session(&self) -> Result<Option<ChampSelectSession>, String> {
         let url = format!("{}/lol-champ-select/v1/session", self.base_url);
-        let resp = self.client
+        let resp = self
+            .client
             .get(&url)
             .basic_auth("riot", Some(&self.creds.token))
             .send()
@@ -168,7 +177,10 @@ impl LcuClient {
         }
 
         if !resp.status().is_success() {
-            return Err(format!("Champ select query returned HTTP {}", resp.status()));
+            return Err(format!(
+                "Champ select query returned HTTP {}",
+                resp.status()
+            ));
         }
 
         let session: ChampSelectSession = resp
@@ -176,5 +188,60 @@ impl LcuClient {
             .map_err(|e| format!("Failed to parse champ select session JSON: {}", e))?;
 
         Ok(Some(session))
+    }
+
+    pub fn get_challenges(&self) -> Result<HashMap<String, ChallengeInfo>, String> {
+        let url = format!(
+            "{}/lol-challenges/v1/challenges/local-player",
+            self.base_url
+        );
+        let resp = self
+            .client
+            .get(&url)
+            .basic_auth("riot", Some(&self.creds.token))
+            .send()
+            .map_err(|e| format!("Failed to fetch challenges: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!(
+                "Failed to fetch challenges: HTTP {}",
+                resp.status()
+            ));
+        }
+
+        resp.json()
+            .map_err(|e| format!("Failed to parse challenges JSON: {}", e))
+    }
+
+    pub fn get_arac_challenge(&self) -> HashSet<i32> {
+        // If fetching challenges fails, return an empty set
+        let challenges = match self.get_challenges() {
+            Ok(c) => c,
+            Err(_) => return HashSet::new(),
+        };
+
+        // Try lookup by "101301", collect if found, otherwise return empty set
+        if let Some(c) = challenges.get("101301") {
+            c.completed_ids.iter().copied().collect()
+        } else {
+            HashSet::new()
+        }
+    }
+
+    pub fn get_raw(&self, endpoint: &str) -> Result<String, String> {
+        let url = format!("{}{}", self.base_url, endpoint);
+        let resp = self
+            .client
+            .get(&url)
+            .basic_auth("riot", Some(&self.creds.token))
+            .send()
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Status: {}", resp.status()));
+        }
+
+        resp.text()
+            .map_err(|e| format!("Failed to read text: {}", e))
     }
 }
