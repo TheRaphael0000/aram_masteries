@@ -33,7 +33,7 @@ jobs:
 
       - name: Determine Release Tag
         run: |
-          TAG=$(git describe --tags --always)
+          TAG=$(git describe --tags --always --exclude "*-g*")
           echo "Determined release tag: $TAG"
           echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
 

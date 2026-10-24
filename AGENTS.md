@@ -102,7 +102,7 @@ cargo test
 
 A release workflow is configured in `.github/workflows/release.yml`:
 - **Triggers**: Automatically on every push/commit to `main`.
-- **Release Version**: Determined via `git describe --tags --always` (with full history fetched via `fetch-depth: 0`).
+- **Release Version**: Determined via `git describe --tags --always --exclude "*-g*"` (with full history fetched via `fetch-depth: 0`, ignoring intermediate release tags).
 - **Runner**: Runs natively on Windows (`windows-latest`) using `bash` as the step shell.
 - **Artifacts**: Produces `aram_masteries.exe` and a `.zip` archive (`aram_masteries-<tag/hash>-windows-x86_64.zip`), attaching both to the GitHub Release.
 
