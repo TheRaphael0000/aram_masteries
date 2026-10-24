@@ -1,3 +1,5 @@
+> this is some vibe coded bs I did in like 10min cause i wanted to see my masteries in ARAM, just be aware.
+
 # ARAM Masteries
 
 A fast Rust CLI application that queries the League of Legends Client (LCU) API to list all available champions during an ARAM draft (both from the **bench/reroll pool** and from **teammates**), ranked by your **Champion Mastery Score**.
