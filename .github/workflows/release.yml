@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -16,6 +16,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Release Tag
+        run: |
+          TAG=$(git describe --tags --always)
+          echo "Determined release tag: $TAG"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Cache cargo tools and dependencies
         uses: actions/cache@v4
@@ -44,7 +52,7 @@ jobs:
       - name: Package Windows Artifacts
         run: |
           EXE_PATH="target/x86_64-pc-windows-msvc/release/aram_masteries.exe"
-          ZIP_NAME="aram_masteries-${{ github.ref_name }}-windows-x86_64.zip"
+          ZIP_NAME="aram_masteries-${RELEASE_TAG}-windows-x86_64.zip"
 
           zip -j "$ZIP_NAME" "$EXE_PATH" README.md
           echo "ARCHIVE_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
@@ -54,6 +62,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" "$EXE_PATH" "$ARCHIVE_NAME" \
-            --title "Release ${{ github.ref_name }}" \
-            --generate-notes
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. Uploading artifacts..."
+            gh release upload "$RELEASE_TAG" "$EXE_PATH" "$ARCHIVE_NAME" --clobber
+          else
+            echo "Creating release $RELEASE_TAG..."
+            gh release create "$RELEASE_TAG" "$EXE_PATH" "$ARCHIVE_NAME" \
+              --title "Release $RELEASE_TAG" \
+              --target "${{ github.sha }}" \
+              --generate-notes
+          fi
