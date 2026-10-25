@@ -1,79 +1,80 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+    push:
+        branches:
+            - main
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+    contents: write
+    id-token: write
+    attestations: write
 
 env:
-  CARGO_INCREMENTAL: 0
-  CARGO_TERM_COLOR: always
+    CARGO_INCREMENTAL: 0
+    CARGO_TERM_COLOR: always
 
 jobs:
-  release:
-    name: Build & Release Windows Binary
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
+    release:
+        name: Build & Release Windows Binary
+        runs-on: windows-latest
+        defaults:
+            run:
+                shell: bash
 
-    steps:
-      - name: Disable Windows Defender on build directories
-        shell: powershell
-        run: |
-          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo", "$env:GITHUB_WORKSPACE"
+        steps:
+            - name: Disable Windows Defender on build directories
+              shell: powershell
+              run: |
+                  Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo", "$env:GITHUB_WORKSPACE"
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-      - name: Determine Release Tag
-        run: |
-          TAG=$(git describe --tags --always --exclude "*-g*")
-          echo "Determined release tag: $TAG"
-          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+            - name: Determine Release Tag
+              run: |
+                  TAG=$(git describe --tags --always --exclude "*-g*")
+                  echo "Determined release tag: $TAG"
+                  echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
 
-      - name: Cache cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/release/
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-release-
+            - name: Cache cargo dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/registry/index/
+                      ~/.cargo/registry/cache/
+                      ~/.cargo/git/db/
+                      target/release/
+                  key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-cargo-release-
 
-      - name: Run Tests (Release mode)
-        run: cargo test --release
+            - name: Run Tests (Release mode)
+              run: cargo test --release
 
-      - name: Build Windows Binary
-        run: cargo build --release --locked
+            - name: Build Windows Binary
+              run: cargo build --release --locked
 
-      - name: Package Windows Artifacts
-        run: |
-          EXE_PATH="target/release/aram_masteries.exe"
-          RELEASE_PATH="./aram_masteries-${RELEASE_TAG}-windows-x86_64.exe"
-          mv $EXE_PATH $RELEASE_PATH
-          echo "RELEASE_PATH=$RELEASE_PATH" >> "$GITHUB_ENV"
+            - name: Package Windows Artifacts
+              id: package
+              run: |
+                  EXE_PATH="target/release/aram_masteries.exe"
+                  RELEASE_PATH="./aram_masteries-${RELEASE_TAG}-windows-x86_64.exe"
+                  mv $EXE_PATH $RELEASE_PATH
+                  echo "RELEASE_PATH=$RELEASE_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: '$RELEASE_PATH'
+            - name: Attest build provenance
+              uses: actions/attest-build-provenance@v1
+              with:
+                  subject-path: ${{ steps.package.outputs.RELEASE_PATH }}
 
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "$RELEASE_TAG" "$RELEASE_PATH" \
-            --title "Release $RELEASE_TAG" \
-            --target "${{ github.sha }}" \
-            --generate-notes
+            - name: Publish GitHub Release
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  gh release create "$RELEASE_TAG" "${{ steps.package.outputs.RELEASE_PATH }}" \
+                    --title "Release $RELEASE_TAG" \
+                    --target "${{ github.sha }}" \
+                    --generate-notes
