@@ -1,11 +1,11 @@
 pub mod lcu;
 pub mod models;
 
-use std::collections::{HashMap, HashSet};
 use colored::*;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, CellAlignment, Color, ContentArrangement, Row, Table};
+use std::collections::{HashMap, HashSet};
 
 use crate::models::{AvailableChampion, ChampSelectSession, ChampionMasteryItem, ChampionSource};
 
@@ -53,7 +53,9 @@ pub fn extract_available_champions(
                 source: ChampionSource::Current,
                 mastery_level: mastery.map(|m| m.champion_level).unwrap_or(0),
                 mastery_points: mastery.map(|m| m.champion_points).unwrap_or(0),
-                points_until_next_level: mastery.map(|m| m.champion_points_until_next_level).unwrap_or(0),
+                points_until_next_level: mastery
+                    .map(|m| m.champion_points_until_next_level)
+                    .unwrap_or(0),
                 highest_grade: mastery.and_then(|m| m.highest_grade.clone()),
                 arac_completed: arac_completed_ids.contains(&member.champion_id),
             };
@@ -79,7 +81,9 @@ pub fn extract_available_champions(
                     source: ChampionSource::Bench,
                     mastery_level: mastery.map(|m| m.champion_level).unwrap_or(0),
                     mastery_points: mastery.map(|m| m.champion_points).unwrap_or(0),
-                    points_until_next_level: mastery.map(|m| m.champion_points_until_next_level).unwrap_or(0),
+                    points_until_next_level: mastery
+                        .map(|m| m.champion_points_until_next_level)
+                        .unwrap_or(0),
                     highest_grade: mastery.and_then(|m| m.highest_grade.clone()),
                     arac_completed: arac_completed_ids.contains(&bench.champion_id),
                 });
@@ -102,7 +106,9 @@ pub fn extract_available_champions(
                     source: ChampionSource::Teammate,
                     mastery_level: mastery.map(|m| m.champion_level).unwrap_or(0),
                     mastery_points: mastery.map(|m| m.champion_points).unwrap_or(0),
-                    points_until_next_level: mastery.map(|m| m.champion_points_until_next_level).unwrap_or(0),
+                    points_until_next_level: mastery
+                        .map(|m| m.champion_points_until_next_level)
+                        .unwrap_or(0),
                     highest_grade: mastery.and_then(|m| m.highest_grade.clone()),
                     arac_completed: arac_completed_ids.contains(&member.champion_id),
                 });
@@ -123,7 +129,10 @@ pub fn extract_available_champions(
 
 pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<AvailableChampion>) {
     if champions.is_empty() {
-        println!("{}", "No available champions found matching criteria.".yellow());
+        println!(
+            "{}",
+            "No available champions found matching criteria.".yellow()
+        );
         return;
     }
 
@@ -135,7 +144,7 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
         };
         println!(
             "{} {} (Level {}, {} pts, ARAC: {})",
-            "Currently Assigned:".bold().cyan(),
+            "Current:".bold().cyan(),
             curr.name.bold().green(),
             curr.mastery_level,
             format_number(curr.mastery_points).yellow(),
@@ -155,8 +164,7 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
             Cell::new("Source").set_alignment(CellAlignment::Center),
             Cell::new("Mastery Level").set_alignment(CellAlignment::Right),
             Cell::new("Mastery Points").set_alignment(CellAlignment::Right),
-            Cell::new("Next Level in").set_alignment(CellAlignment::Right),
-            Cell::new("Season Grade").set_alignment(CellAlignment::Center),
+            Cell::new("Missing Points").set_alignment(CellAlignment::Right),
             Cell::new("All Random All Champions").set_alignment(CellAlignment::Center),
         ]);
 
@@ -166,14 +174,6 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
             ChampionSource::Bench => ("[BENCH POOL]", Color::Cyan),
             ChampionSource::Teammate => ("[TEAMMATE]", Color::Yellow),
         };
-
-        let next_pts = if champ.points_until_next_level > 0 {
-            format!("+{}", format_number(champ.points_until_next_level as u64))
-        } else {
-            "-".to_string()
-        };
-
-        let grade = champ.highest_grade.as_deref().unwrap_or("-");
 
         let (arac_str, arac_color) = if champ.arac_completed {
             ("Completed", Color::Green)
@@ -188,22 +188,47 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
                 .set_alignment(CellAlignment::Left)
                 .fg(if champ.source == ChampionSource::Current {
                     Color::Green
-                } else if champ.mastery_points > 100_000 {
+                } else if champ.mastery_level >= 10 {
                     Color::Yellow
                 } else {
                     Color::White
                 }),
         );
-        row.add_cell(Cell::new(source_str).set_alignment(CellAlignment::Center).fg(source_color));
-        row.add_cell(Cell::new(format!("{}", champ.mastery_level)).set_alignment(CellAlignment::Right));
+        row.add_cell(
+            Cell::new(source_str)
+                .set_alignment(CellAlignment::Center)
+                .fg(source_color),
+        );
+        row.add_cell(
+            Cell::new(format!("{}", champ.mastery_level)).set_alignment(CellAlignment::Right),
+        );
         row.add_cell(
             Cell::new(format_number(champ.mastery_points))
                 .set_alignment(CellAlignment::Right)
-                .fg(if champ.mastery_points > 0 { Color::Yellow } else { Color::DarkGrey }),
+                .fg(if champ.mastery_points > 0 {
+                    Color::Yellow
+                } else {
+                    Color::DarkGrey
+                }),
         );
-        row.add_cell(Cell::new(next_pts).set_alignment(CellAlignment::Right));
-        row.add_cell(Cell::new(grade).set_alignment(CellAlignment::Center));
-        row.add_cell(Cell::new(arac_str).set_alignment(CellAlignment::Center).fg(arac_color));
+
+        let target_points: u64 = 75600;
+        let missing_points: u64 = target_points.saturating_sub(champ.mastery_points);
+
+        row.add_cell(
+            Cell::new(format_number(missing_points))
+                .set_alignment(CellAlignment::Right)
+                .fg(if missing_points > 0 {
+                    Color::Red
+                } else {
+                    Color::DarkGrey
+                }),
+        );
+        row.add_cell(
+            Cell::new(arac_str)
+                .set_alignment(CellAlignment::Center)
+                .fg(arac_color),
+        );
 
         table.add_row(row);
     }
@@ -212,7 +237,11 @@ pub fn print_champions_table(champions: &[AvailableChampion], current: &Option<A
 }
 
 pub fn generate_signature(session: &ChampSelectSession) -> String {
-    let mut bench_ids: Vec<i32> = session.bench_champions.iter().map(|b| b.champion_id).collect();
+    let mut bench_ids: Vec<i32> = session
+        .bench_champions
+        .iter()
+        .map(|b| b.champion_id)
+        .collect();
     bench_ids.sort();
     let team_picks: Vec<String> = session
         .my_team

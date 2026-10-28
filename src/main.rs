@@ -60,18 +60,6 @@ impl From<&Cli> for ExtractOptions {
     }
 }
 
-fn chrono_now() -> String {
-    use std::time::SystemTime;
-    let dur = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default();
-    let total_secs = dur.as_secs();
-    let secs = total_secs % 60;
-    let mins = (total_secs / 60) % 60;
-    let hours = (total_secs / 3600) % 24;
-    format!("{:02}:{:02}:{:02}", hours, mins, secs)
-}
-
 fn wait_for_lcu(
     port: Option<u16>,
     auth: Option<String>,
@@ -84,8 +72,7 @@ fn wait_for_lcu(
         match LcuClient::new(port, auth.clone()) {
             Ok(client) => {
                 println!(
-                    "{} Connected to League Client (LCU) on port {}",
-                    "✓".green().bold(),
+                    "Connected to League Client (LCU) on port {}",
                     client.creds.port.to_string().cyan()
                 );
                 let champion_names = match client.get_champion_map() {
@@ -103,10 +90,7 @@ fn wait_for_lcu(
             }
             Err(_) => {
                 if !logged_waiting {
-                    println!(
-                        "{} Waiting for League of Legends client to launch and log in...",
-                        "⏳".bold()
-                    );
+                    println!("Waiting for League of Legends client to launch and log in...",);
                     logged_waiting = true;
                 }
                 thread::sleep(poll_delay);
@@ -150,13 +134,6 @@ fn run_single(
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
         println!("{}", json_output);
     } else {
-        println!(
-            "{} ARAM Draft Active | Bench: {} | Teammates: {}",
-            "✓".green().bold(),
-            session.bench_champions.len(),
-            session.my_team.len().saturating_sub(1)
-        );
-        println!();
         print_champions_table(&champions, &current);
     }
 
@@ -169,15 +146,15 @@ fn run_watch(
     cli: &Cli,
 ) -> Result<(), String> {
     println!(
-        "{} Monitoring Champion Select (interval: {}s)... Press Ctrl+C to exit.",
-        "👀".bold(),
+        "Monitoring Champion Select (interval: {}s)... Press Ctrl+C to exit.",
         cli.interval
     );
 
     let mut last_signature: Option<String> = None;
     let mut in_session = false;
-    let arac_completed_ids = lcu.get_arac_challenge();
-    let masteries = lcu.get_mastery_map()?;
+    let mut was_not_in_champ_select = true;
+    let mut arac_completed_ids = lcu.get_arac_challenge();
+    let mut masteries = lcu.get_mastery_map()?;
 
     let sleep_dur = Duration::from_secs_f32(cli.interval.max(0.5));
     let options = ExtractOptions::from(cli);
@@ -185,6 +162,11 @@ fn run_watch(
     loop {
         match lcu.get_champ_select_session() {
             Ok(Some(session)) => {
+                // update these if we were not in champ select before
+                if was_not_in_champ_select {
+                    arac_completed_ids = lcu.get_arac_challenge();
+                    masteries = lcu.get_mastery_map()?;
+                }
                 let sig = generate_signature(&session);
                 let changed = last_signature.as_ref() != Some(&sig);
 
@@ -205,39 +187,28 @@ fn run_watch(
                             println!("{}", json_output);
                         }
                     } else {
-                        println!(
-                            "{} {} | Bench: {} | Teammates: {}",
-                            "🎲 ARAM Draft Active".bold().cyan(),
-                            chrono_now(),
-                            session.bench_champions.len().to_string().yellow(),
-                            session.my_team.len().saturating_sub(1).to_string().yellow()
-                        );
-                        println!();
                         print_champions_table(&champions, &current);
                     }
 
                     last_signature = Some(sig);
                     in_session = true;
+                    was_not_in_champ_select = false;
                 }
             }
             Ok(None) => {
                 if in_session || last_signature.is_none() {
                     print!("\x1B[2J\x1B[1;1H");
-                    println!(
-                        "{} {} - Waiting for ARAM Champion Select draft to begin...",
-                        "⏳".bold(),
-                        chrono_now()
-                    );
+                    println!("Waiting for ARAM Champion Select draft to begin...",);
                     in_session = false;
                     last_signature = Some("NONE".to_string());
                 }
+                was_not_in_champ_select = true;
             }
             Err(e) => {
                 // If the connection was refused or lost (e.g. League Client closed or restarted)
                 print!("\x1B[2J\x1B[1;1H");
                 println!(
-                    "{} Connection lost ({}), waiting for League of Legends client...",
-                    "⏳".bold(),
+                    "Connection lost ({}), waiting for League of Legends client...",
                     e.dimmed()
                 );
                 let (new_client, new_names) =
@@ -246,6 +217,7 @@ fn run_watch(
                 champion_names = new_names;
                 last_signature = None;
                 in_session = false;
+                was_not_in_champ_select = true;
             }
         }
 
@@ -261,8 +233,7 @@ fn main() {
         let lcu = match LcuClient::new(cli.port, cli.auth.clone()) {
             Ok(client) => {
                 println!(
-                    "{} Connected to LCU on port {}",
-                    "✓".green().bold(),
+                    "Connected to LCU on port {}",
                     client.creds.port.to_string().cyan()
                 );
                 client
